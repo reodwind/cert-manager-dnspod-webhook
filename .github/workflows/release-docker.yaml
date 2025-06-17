@@ -1,4 +1,4 @@
-name: Release Image
+name: Docker Image Build and Push
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "version"
+  workflow_dispatch:
 
 env:
   GHCR_REPO: ghcr.io/${{ github.repository_owner }}/dnspod-webhook
