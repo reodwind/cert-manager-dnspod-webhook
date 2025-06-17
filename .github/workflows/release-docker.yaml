@@ -9,6 +9,7 @@ on:
 
 env:
   GHCR_REPO: ghcr.io/${{ github.repository_owner }}/dnspod-webhook
+  DOCKERHUB_REPO: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/dnspod-webhook
 
 jobs:
   build:
