@@ -57,9 +57,9 @@ func (c *dnspodSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 	klog.Infof("Present challenge dnsName: %v fqdn: %v Key: %v", ch.DNSName, ch.ResolvedFQDN, ch.Key)
 	c.InitDNSPodClie(ch)                                      //初始化客户端
 	domain, sub := analysis(ch.ResolvedZone, ch.ResolvedFQDN) //处理k8s的参数给客户端用
-	req := NewRequest(domain, SetSub(sub), SetValue(ch.Key))
+	req := NewRequest(domain, SetSub(sub), SetValue(ch.Key), SetRecordType("TXT"))
 	//创建TXT记录
-	_, err := c.CreateTXTRecord(req)
+	_, err := c.CreateRecord(req)
 	if err != nil {
 		klog.Infof("Failed to create TXT record! Error issue: %v", err)
 		return err
@@ -216,7 +216,7 @@ func (c *dnspodSolver) getHostedZone(dreq *dnspodReq) (*uint64, *string, error) 
 	return domain.DomainId, domain.Domain, nil
 }
 
-// 创建TXT记录
+// 创建TXT记录(只支持国内，国外不支持先弃用)
 func (c *dnspodSolver) CreateTXTRecord(dreq *dnspodReq) (*uint64, error) {
 	// 参数初始化
 	req := dnspod.NewCreateTXTRecordRequest()
@@ -234,6 +234,35 @@ func (c *dnspodSolver) CreateTXTRecord(dreq *dnspodReq) (*uint64, error) {
 				return nil, err
 			}
 			return c.CreateTXTRecord(dreq)
+		}
+		klog.Errorf("CreateTXTRecord An API error has returned: %s", err)
+		return nil, err
+	}
+	if resp.Response == nil {
+		return nil, fmt.Errorf("add TXT record error")
+	}
+	return resp.Response.RecordId, nil
+}
+
+// 创建一条记录
+func (c *dnspodSolver) CreateRecord(dreq *dnspodReq) (*uint64, error) {
+	//初始化参数
+	req := dnspod.NewCreateRecordRequest()
+	req.Domain = dreq.domain
+	req.SubDomain = dreq.sub
+	req.Value = dreq.value
+	req.RecordLine = dreq.recordline
+	req.RecordType = dreq.recordType
+	//创建记录
+	resp, err := c.dnspodClie.CreateRecord(req)
+	if sdkerr, ok := err.(*errors.TencentCloudSDKError); ok {
+		//这里是已经有记录了，我这里直接使用API处理了
+		if sdkerr.Code == "InvalidParameter.DomainRecordExist" {
+			err = c.DeleteTXTRecord(dreq)
+			if err != nil {
+				return nil, err
+			}
+			return c.CreateRecord(dreq)
 		}
 		klog.Errorf("CreateTXTRecord An API error has returned: %s", err)
 		return nil, err
