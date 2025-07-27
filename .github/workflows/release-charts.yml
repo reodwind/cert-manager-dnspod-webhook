@@ -1,0 +1,61 @@
+name: Release Charts
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "version"
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Read version from file
+        id: version
+        run: |
+          VERSION=$(cat version)
+          echo "Using version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install yq (YAML processor)
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.45.4/yq_linux_amd64 -O /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update Chart versions and image tags
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          echo "Using version: $VERSION"
+
+          find charts -type d -mindepth 1 -maxdepth 1 | while read chart_dir; do
+            echo "Processing chart: $chart_dir"
+            if [ -f "$chart_dir/Chart.yaml" ]; then
+              yq eval '.version = strenv(VERSION)' -i "$chart_dir/Chart.yaml"
+              yq eval '.appVersion = strenv(VERSION)' -i "$chart_dir/Chart.yaml"
+            fi
+
+            if [ -f "$chart_dir/values.yaml" ]; then
+              yq eval '.image.tag = strenv(VERSION)' -i "$chart_dir/values.yaml"
+            fi
+          done
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
+        with:
+          charts_dir: charts
+          config: charts/cr.yaml
+          allow_dirty: true # 允许本地修改
+          skip_existing: true  # 覆盖现有版本
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"

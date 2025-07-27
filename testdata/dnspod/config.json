@@ -1,0 +1,11 @@
+{
+    "disableCHAME": true,
+    "secretIdSecretRef": {
+        "name": "dnspod-secret",
+        "key": "access-token"
+    },
+    "secretKeySecretRef": {
+        "name": "dnspod-secret",
+        "key": "secret-key"
+    }
+}
